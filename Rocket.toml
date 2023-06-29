@@ -1,0 +1,2 @@
+[default.databases.rusqlite]
+url = "/home/arne/IdeaProjects/inx-edcas-indexer/database.db"
