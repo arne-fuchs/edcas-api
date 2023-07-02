@@ -78,7 +78,7 @@ async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: Db, name: String) -> Op
     let some_commodity = cache.lock().unwrap().get_commodity(name.clone());
     return match some_commodity {
         None => {
-            let commodity = db.run(move |conn| {
+            let commodity: Commodity = db.run(move |conn| {
                 conn.query_row("SELECT avg(buy_price),avg(sell_price),avg(mean_price) from commodity where name = ?", params![name_clone.clone()],
                                |r| Ok(Commodity {
                                    name: Option::from(name_clone),
@@ -88,7 +88,11 @@ async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: Db, name: String) -> Op
                                }))
             }).await.ok()?;
 
-            cache.lock().unwrap().put_commodity(commodity.clone(),name.clone());
+            //Check if value is there. If not, do not cache! May lead to let memory bloat if there are too many wrong api calls
+            match commodity.avg_price {
+                None => {}
+                Some(_) => {cache.lock().unwrap().put_commodity(commodity.clone(),name.clone());}
+            }
 
             Some(Json(commodity))
         }
