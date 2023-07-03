@@ -120,15 +120,15 @@ where name = ?;
                                    let lowest_buy_data = json!(
                                        {
                                            "buy_price": r.get::<usize,u64>(3).unwrap_or(0),
-                                           "station": r.get::<usize,String>(4).unwrap_or(String::from("N/A")),
-                                           "system": r.get::<usize,String>(5).unwrap_or(String::from("N/A"))
+                                           "station": r.get::<usize,String>(4).unwrap_or(String::from("null")),
+                                           "system": r.get::<usize,String>(5).unwrap_or(String::from("null"))
                                        }
                                    );
                                    let highest_sell_data = json!(
                                        {
                                            "sell_price": r.get::<usize,u64>(6).unwrap_or(0),
-                                           "station": r.get::<usize,String>(7).unwrap_or(String::from("N/A")),
-                                           "system": r.get::<usize,String>(8).unwrap_or(String::from("N/A"))
+                                           "station": r.get::<usize,String>(7).unwrap_or(String::from("null")),
+                                           "system": r.get::<usize,String>(8).unwrap_or(String::from("null"))
                                        }
                                    );
                                    Ok(Commodity {
