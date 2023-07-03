@@ -78,6 +78,7 @@ struct Commodity {
     highest_sell_price: Option<Value>,
 }
 
+//TODO Handle stuff like drones where there are no stations etc.
 #[get("/commodity/<name>")]
 async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: Db, name: String) -> Option<Json<Commodity>> {
     let name_clone = name.clone();
@@ -118,16 +119,16 @@ where name = ?;
                                |r| {
                                    let lowest_buy_data = json!(
                                        {
-                                           "buy_price": r.get::<usize,u64>(3).unwrap(),
-                                           "station": r.get::<usize,String>(4).unwrap(),
-                                           "system": r.get::<usize,String>(5).unwrap()
+                                           "buy_price": r.get::<usize,u64>(3).unwrap_or(0),
+                                           "station": r.get::<usize,String>(4).unwrap_or(String::from("N/A")),
+                                           "system": r.get::<usize,String>(5).unwrap_or(String::from("N/A"))
                                        }
                                    );
                                    let highest_sell_data = json!(
                                        {
-                                           "sell_price": r.get::<usize,u64>(6).unwrap(),
-                                           "station": r.get::<usize,String>(7).unwrap(),
-                                           "system": r.get::<usize,String>(8).unwrap()
+                                           "sell_price": r.get::<usize,u64>(6).unwrap_or(0),
+                                           "station": r.get::<usize,String>(7).unwrap_or(String::from("N/A")),
+                                           "system": r.get::<usize,String>(8).unwrap_or(String::from("N/A"))
                                        }
                                    );
                                    Ok(Commodity {
