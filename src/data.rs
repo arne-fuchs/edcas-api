@@ -90,31 +90,34 @@ async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: Db, name: String) -> Op
                 select avg(buy_price),
        avg(sell_price),
        avg(mean_price),
-       min(case when buy_price > 0 and stock > 1000 then buy_price end) as lowest_buy_price,
+       lowest_buy_price,
        lowest_buy_station,
        lowest_buy_system,
-       max(sell_price) as highest_sell_price,
+       highest_sell_price,
        highest_sell_station,
        highest_sell_system
 from commodity
-        left join
-     (select station_name as highest_sell_station, system_name as highest_sell_system
+
+         inner join
+
+     (select max(sell_price) as highest_sell_price, sh.station_name as highest_sell_station, sh.system_name as highest_sell_system
+      from commodity hc
+               inner join station sh on hc.market_id = sh.market_id
+      where hc.name = ?
+        and sh.station_name not like '___-___'
+      limit 1)
+
+         inner join
+
+     (select min(case when buy_price > 0 then buy_price end) as lowest_buy_price,station_name as lowest_buy_station, system_name as lowest_buy_system
       from station
-      where station.market_id = (select market_id
-                                 from commodity
-                                 where sell_price = (select max(sell_price)
-                                                     from commodity
-                                                     where name = ? limit 1)))
-                                                     left join
-     (select station_name as lowest_buy_station, system_name as lowest_buy_system
-      from station
-      where station.market_id = (select market_id
-                                 from commodity
-                                 where buy_price = (select min(case when buy_price > 0 then buy_price end)
-                                                     from commodity
-                                                     where name = ? and stock > 1000 limit 1)))
+               inner join commodity lowest_buy_commodity on station.market_id = lowest_buy_commodity.market_id
+      where station_name not like '___-___'
+        and lowest_buy_commodity.name = ?
+      )
 
 where name = ?;
+
 ", params![name_clone.clone(),name_clone.clone(),name_clone.clone()],
                                |r| {
                                    let lowest_buy_data = json!(
