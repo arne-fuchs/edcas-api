@@ -3,8 +3,6 @@ mod data;
 //noinspection RsMainFunctionNotFound
 #[macro_use] extern crate rocket;
 
-use json::JsonValue;
-use rocket::response::Redirect;
 use rocket::{Build, Rocket};
 
 #[get("/ping")]
