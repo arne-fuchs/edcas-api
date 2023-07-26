@@ -1,2 +1,2 @@
-[default.databases.rusqlite]
-url = "/home/arne/IdeaProjects/inx-edcas-indexer/database.db"
+[default.databases.postgres]
+url = "jdbc:postgresql://localhost:5432/edcas"
