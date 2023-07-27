@@ -248,7 +248,7 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, address: i64, dlc:
                     sql = "select name,id,distance_from_arrival_ls,tidal_lock,terraform_state,class,atmosphere,volcanism,mass_em,radius,surface_gravity,surface_temperature,surface_pressure,
                     landable,semi_major_axis,eccentricity,orbital_inclination,periapsis,orbital_period,ascending_node,mean_anomaly,rotation_period,axial_tilt,discovered,mapped from body where system_address = $1 and odyssey = $2";
 
-                    let planets_options = conn.query(sql, &[&address, &odyssey]).unwrap();
+                    let planets_options = conn.query(sql, &[&address, &odyssey]).ok();
 
 
                     if let Some(planets) = planets_options {
