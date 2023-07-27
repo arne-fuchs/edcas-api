@@ -140,6 +140,7 @@ pub struct Planet {
     pub axial_tilt: Option<f32>,
     pub was_discovered: Option<bool>,
     pub was_mapped: Option<bool>,
+    pub parents: Vec<Value>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -167,6 +168,7 @@ pub struct Star {
     pub axial_tilt: Option<f32>,
     pub was_discovered: Option<bool>,
     pub was_mapped: Option<bool>,
+    pub parents: Vec<Value>,
 }
 
 #[get("/<dlc>/system/<address>")]
@@ -213,11 +215,28 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, address: i64, dlc:
                         let mut star_vec: Vec<Star> = vec![];
 
                         for r in stars {
+
+                            let id : i32 = r.get(1);
+                            //language=postgresql
+                            let parents_sql = "select parent_type,parent_id from parents where system_address = $1 and body_id = $2";
+
+                            let parents_option = conn.query(parents_sql,&[&address,&id]).unwrap();
+
+                            let mut parent_array:Vec<Value> = vec![];
+                            for row in parents_option {
+                                let key: &str = row.get(0);
+                                let value: i32 = row.get(1);
+                                let json_object = json!({ key: value });
+                                parent_array.push(json_object);
+                            }
+
+
+
                             let discovered = r.get(20);
                             let mapped = r.get(21);
                             star_vec.push(Star {
                                 body_name: r.get(0),
-                                body_id: Some(r.get(1)),
+                                body_id: Some(id),
                                 distance_from_arrival_ls: Some(r.get(2)),
                                 star_type: r.get(3),
                                 subclass: r.get(4),
@@ -238,6 +257,7 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, address: i64, dlc:
                                 axial_tilt: r.get(19),
                                 was_discovered: discovered,
                                 was_mapped: mapped,
+                                parents: parent_array,
                             });
                         }
 
@@ -255,13 +275,28 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, address: i64, dlc:
                         let mut planet_vec: Vec<Planet> = vec![];
 
                         for r in planets {
+
+                            let id : i32 = r.get(1);
+                            //language=postgresql
+                            let parents_sql = "select parent_type,parent_id from parents where system_address = $1 and body_id = $2";
+
+                            let parents_option = conn.query(parents_sql,&[&address,&id]).unwrap();
+
+                            let mut parent_array:Vec<Value> = vec![];
+                            for row in parents_option {
+                                let key: &str = row.get(0);
+                                let value: i32 = row.get(1);
+                                let json_object = json!({ key: value });
+                                parent_array.push(json_object);
+                            }
+
                             let tidal_lock = r.get(3);
                             let discovered: Option<bool> = r.get(23);
                             let mapped: Option<bool> = r.get(24);
 
                             planet_vec.push(Planet {
                                 body_name: r.get(0),
-                                body_id: r.get(1),
+                                body_id: Some(id),
                                 distance_from_arrival_ls: r.get(2),
                                 tidal_lock,
                                 terraform_state: r.get(4),
@@ -285,6 +320,7 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, address: i64, dlc:
                                 axial_tilt: r.get(22),
                                 was_discovered: discovered,
                                 was_mapped: mapped,
+                                parents: parent_array,
                             });
                         }
                         local_system.planets = Some(planet_vec);
