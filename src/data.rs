@@ -12,8 +12,8 @@ use rocket_sync_db_pools::database;
 use rocket_sync_db_pools::postgres;
 use serde_json::{json, Value};
 
-#[database("postgres")]
-struct Db(postgres::Client);
+#[database("postgres_db")]
+struct DbConn(postgres::Client);
 
 struct Cache {
     commodity: HashMap<String, CommodityCache>,
@@ -97,18 +97,18 @@ struct System {
     #[serde(skip_deserializing, skip_serializing_if = "Option::is_none")]
     name: Option<String>,
     address: Option<i64>,
-    body_count: Option<i64>,
-    non_body_count: Option<i64>,
-    population: Option<i64>,
+    body_count: Option<i32>,
+    non_body_count: Option<i32>,
+    population: Option<i32>,
     allegiance: Option<String>,
     economy: Option<String>,
     second_economy: Option<String>,
     government: Option<String>,
     security: Option<String>,
     faction: Option<String>,
-    x: Option<f64>,
-    y: Option<f64>,
-    z: Option<f64>,
+    x: Option<f32>,
+    y: Option<f32>,
+    z: Option<f32>,
     planets: Option<Vec<Planet>>,
     stars: Option<Vec<Star>>,
 }
@@ -117,28 +117,28 @@ struct System {
 #[serde(crate = "rocket::serde")]
 pub struct Planet {
     pub body_name: Option<String>,
-    pub body_id: Option<i64>,
-    pub distance_from_arrival_ls: Option<f64>,
+    pub body_id: Option<i32>,
+    pub distance_from_arrival_ls: Option<f32>,
     pub tidal_lock: Option<bool>,
     pub terraform_state: Option<String>,
     pub planet_class: Option<String>,
     pub atmosphere: Option<String>,
     pub volcanism: Option<String>,
-    pub mass_em: Option<f64>,
-    pub radius: Option<f64>,
-    pub surface_gravity: Option<f64>,
-    pub surface_temperature: Option<f64>,
-    pub surface_pressure: Option<f64>,
+    pub mass_em: Option<f32>,
+    pub radius: Option<f32>,
+    pub surface_gravity: Option<f32>,
+    pub surface_temperature: Option<f32>,
+    pub surface_pressure: Option<f32>,
     pub landable: Option<bool>,
-    pub semi_major_axis: Option<f64>,
-    pub eccentricity: Option<f64>,
-    pub orbital_inclination: Option<f64>,
-    pub periapsis: Option<f64>,
-    pub orbital_period: Option<f64>,
-    pub ascending_node: Option<f64>,
-    pub mean_anomaly: Option<f64>,
-    pub rotation_period: Option<f64>,
-    pub axial_tilt: Option<f64>,
+    pub semi_major_axis: Option<f32>,
+    pub eccentricity: Option<f32>,
+    pub orbital_inclination: Option<f32>,
+    pub periapsis: Option<f32>,
+    pub orbital_period: Option<f32>,
+    pub ascending_node: Option<f32>,
+    pub mean_anomaly: Option<f32>,
+    pub rotation_period: Option<f32>,
+    pub axial_tilt: Option<f32>,
     pub was_discovered: Option<bool>,
     pub was_mapped: Option<bool>,
 }
@@ -147,46 +147,45 @@ pub struct Planet {
 #[serde(crate = "rocket::serde")]
 pub struct Star {
     pub body_name: Option<String>,
-    pub body_id: Option<i64>,
-    pub distance_from_arrival_ls: Option<f64>,
+    pub body_id: Option<i32>,
+    pub distance_from_arrival_ls: Option<f32>,
     pub star_type: Option<String>,
-    pub subclass: Option<i64>,
-    pub stellar_mass: Option<f64>,
-    pub radius: Option<f64>,
-    pub absolute_magnitude: Option<f64>,
-    pub age_my: Option<i64>,
-    pub surface_temperature: Option<f64>,
+    pub subclass: Option<i32>,
+    pub stellar_mass: Option<f32>,
+    pub radius: Option<f32>,
+    pub absolute_magnitude: Option<f32>,
+    pub age_my: Option<i32>,
+    pub surface_temperature: Option<f32>,
     pub luminosity: Option<String>,
-    pub semi_major_axis: Option<f64>,
-    pub eccentricity: Option<f64>,
-    pub orbital_inclination: Option<f64>,
-    pub periapsis: Option<f64>,
-    pub orbital_period: Option<f64>,
-    pub ascending_node: Option<f64>,
-    pub mean_anomaly: Option<f64>,
-    pub rotation_period: Option<f64>,
-    pub axial_tilt: Option<f64>,
+    pub semi_major_axis: Option<f32>,
+    pub eccentricity: Option<f32>,
+    pub orbital_inclination: Option<f32>,
+    pub periapsis: Option<f32>,
+    pub orbital_period: Option<f32>,
+    pub ascending_node: Option<f32>,
+    pub mean_anomaly: Option<f32>,
+    pub rotation_period: Option<f32>,
+    pub axial_tilt: Option<f32>,
     pub was_discovered: Option<bool>,
     pub was_mapped: Option<bool>,
 }
 
 #[get("/<dlc>/system/<address>")]
-async fn system(cache: &State<Arc<Mutex<Cache>>>, db: Db, address: String, dlc: String) -> Option<Json<System>> {
+async fn system(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, address: i64, dlc: String) -> Option<Json<System>> {
     let odyssey = dlc.contains("odyssey");
-    let address_clone = i64::from_str(address.as_str()).unwrap();
-    let some_system = cache.lock().unwrap().get_system(address_clone.clone());
+    let some_system = cache.lock().unwrap().get_system(address);
     return match some_system {
         None => {
             let system: Option<System> = db.run(move |conn| {
 
                 //language=postgresql
                 let row_option = conn.query_one("select name,address,body_count,non_body_count,population,allegiance,economy,second_economy,government,security,faction,x,y,z from system where address = $1 and odyssey = $2",
-                                                &[&address_clone, &odyssey]).ok();
+                                                &[&address, &odyssey]).ok();
 
                 if let Some(row) = row_option {
                     let mut local_system = System {
                         name: row.get(0),
-                        address: Option::from(address_clone.clone()),
+                        address: Option::from(address),
                         body_count: row.get(2),
                         non_body_count: row.get(3),
                         population: row.get(4),
@@ -215,12 +214,12 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: Db, address: String, dlc: 
                         let mut star_vec: Vec<Star> = vec![];
 
                         for r in stars {
-                            let discovered: String = r.get(20);
-                            let mapped: String = r.get(21);
+                            let discovered = r.get(20);
+                            let mapped = r.get(21);
                             star_vec.push(Star {
                                 body_name: r.get(0),
-                                body_id: r.get(1),
-                                distance_from_arrival_ls: r.get(2),
+                                body_id: Some(r.get(1)),
+                                distance_from_arrival_ls: Some(r.get(2)),
                                 star_type: r.get(3),
                                 subclass: r.get(4),
                                 stellar_mass: r.get(5),
@@ -238,8 +237,8 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: Db, address: String, dlc: 
                                 mean_anomaly: r.get(17),
                                 rotation_period: r.get(18),
                                 axial_tilt: r.get(19),
-                                was_discovered: discovered.parse::<bool>().ok(),
-                                was_mapped: mapped.parse::<bool>().ok(),
+                                was_discovered: discovered,
+                                was_mapped: mapped,
                             });
                         }
 
@@ -250,21 +249,22 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: Db, address: String, dlc: 
                     sql = "select name,id,distance_from_arrival_ls,tidal_lock,terraform_state,class,atmosphere,volcanism,mass_em,radius,surface_gravity,surface_temperature,surface_pressure,
                     landable,semi_major_axis,eccentricity,orbital_inclination,periapsis,orbital_period,ascending_node,mean_anomaly,rotation_period,axial_tilt,discovered,mapped from body where system_address = $1 and odyssey = $2";
 
-                    let planets_options = conn.query(sql, &[&address, &odyssey]).ok();
+                    let planets = conn.query(sql, &[&address, &odyssey]).unwrap();
 
-                    if let Some(planets) = planets_options {
+
+                    //if let Some(planets) = planets_options {
                         let mut planet_vec: Vec<Planet> = vec![];
 
                         for r in planets {
-                            let tidal_lock: String = r.get(3);
-                            let discovered: String = r.get(23);
-                            let mapped: String = r.get(24);
+                            let tidal_lock = r.get(3);
+                            let discovered: Option<bool> = r.get(23);
+                            let mapped: Option<bool> = r.get(24);
 
                             planet_vec.push(Planet {
                                 body_name: r.get(0),
                                 body_id: r.get(1),
                                 distance_from_arrival_ls: r.get(2),
-                                tidal_lock: tidal_lock.parse::<bool>().ok(),
+                                tidal_lock,
                                 terraform_state: r.get(4),
                                 planet_class: r.get(5),
                                 atmosphere: r.get(6),
@@ -284,15 +284,15 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: Db, address: String, dlc: 
                                 mean_anomaly: r.get(20),
                                 rotation_period: r.get(21),
                                 axial_tilt: r.get(22),
-                                was_discovered: discovered.parse::<bool>().ok(),
-                                was_mapped: mapped.parse::<bool>().ok(),
+                                was_discovered: discovered,
+                                was_mapped: mapped,
                             });
                         }
                         local_system.planets = Some(planet_vec);
-                    }
+                    //}
                     return Some(local_system);
                 }
-                return None;
+                None
             }).await;
 
             //Check if value is there. If not, do not cache! May lead to let memory bloat if there are too many wrong api calls
@@ -320,28 +320,28 @@ struct CommodityCache {
 struct Commodity {
     #[serde(skip_deserializing, skip_serializing_if = "Option::is_none")]
     name: Option<String>,
-    buy_price: Option<f64>,
-    sell_price: Option<f64>,
-    mean_price: Option<f64>,
-    lowest_buy_price: Option<Value>,
-    highest_sell_price: Option<Value>,
+    buy_price: i32,
+    sell_price: i32,
+    mean_price: i32,
+    lowest_buy_price: Value,
+    highest_sell_price: Value,
 }
 
 //TODO Handle stuff like drones where there are no stations etc.
 #[get("/<dlc>/commodity/<name>")]
-async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: Db, name: String, dlc: String) -> Option<Json<Commodity>> {
+async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, name: String, dlc: String) -> Option<Json<Commodity>> {
     let name_clone = name.clone();
-    let dlc_clone = dlc.clone();
+    let dlc_clone = dlc.contains("odyssey");
     let some_commodity = cache.lock().unwrap().get_commodity(name.clone());
     return match some_commodity {
         None => {
             let data = db.run(move |conn| {
                 //language=postgresql
-                let optional_row = conn.query_one("
+                let sql = "
                     SELECT DISTINCT
-                                AVG(buy_price) OVER () as avg_buy_price,
-                                AVG(sell_price) OVER () as avg_sell_price,
-                                AVG(mean_price) OVER () as avg_mean_price,
+                                CAST(AVG(buy_price) OVER () as INTEGER) as avg_buy_price,
+                                CAST(AVG(sell_price) OVER () as INTEGER) as avg_sell_price,
+                                CAST(AVG(mean_price) OVER () as INTEGER) as avg_mean_price,
                                 lowest_buy_price,
                                 lowest_buy_station,
                                 lowest_buy_system,
@@ -356,7 +356,7 @@ async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: Db, name: String, dlc: 
                                ROW_NUMBER() OVER (ORDER BY sell_price DESC) as rn
                         FROM commodity hc
                                  INNER JOIN station sh ON hc.market_id = sh.market_id
-                        WHERE hc.name = $1 AND hc.odyssey = $4
+                        WHERE hc.name = $1 AND hc.odyssey = $2
                           AND sh.name NOT LIKE '___-___'
                     ) AS highest_sell
                                         ON 1=1 -- Dummy join to get a Cartesian product (all combinations)
@@ -368,25 +368,26 @@ async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: Db, name: String, dlc: 
                         FROM station lb
                                  INNER JOIN commodity lowest_buy_commodity ON lb.market_id = lowest_buy_commodity.market_id
                         WHERE lb.name NOT LIKE '___-___'
-                          AND lowest_buy_commodity.name = $2 AND lowest_buy_commodity.odyssey = $5 AND lowest_buy_commodity.buy_price > 0
+                          AND lowest_buy_commodity.name = $1 AND lowest_buy_commodity.odyssey = $2 AND lowest_buy_commodity.buy_price > 0
                     ) AS lowest_buy
                                         ON 1=1 -- Dummy join to get a Cartesian product (all combinations)
-                    WHERE name = $3 AND odyssey = $6
+                    WHERE name = $1 AND odyssey = $2
                       AND lowest_buy.rn = 1
                       AND highest_sell.rn = 1;
-                    ", &[&name_clone, &name_clone, &name_clone, &dlc_clone, &dlc_clone, &dlc_clone]).ok();
+                    ";
+                let r = conn.query_one(sql, &[&name_clone, &dlc_clone]).unwrap();
 
-                if let Some(r) = optional_row {
+                //if let Some(r) = optional_row {
                     let lowest_buy_data = json!(
                         {
-                            "buy_price": r.get::<usize,i64>(3),
+                            "buy_price": r.get::<usize,i32>(3),
                             "station": r.get::<usize,String>(4),
                             "system": r.get::<usize,String>(5),
                         }
                     );
                     let highest_sell_data = json!(
                         {
-                            "sell_price": r.get::<usize,i64>(6),
+                            "sell_price": r.get::<usize,i32>(6),
                             "station": r.get::<usize,String>(7),
                             "system": r.get::<usize,String>(8),
                         }
@@ -396,11 +397,11 @@ async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: Db, name: String, dlc: 
                         buy_price: r.get(0),
                         sell_price: r.get(1),
                         mean_price: r.get(2),
-                        lowest_buy_price: Some(lowest_buy_data),
-                        highest_sell_price: Some(highest_sell_data),
+                        lowest_buy_price: lowest_buy_data,
+                        highest_sell_price: highest_sell_data,
                     };
                     return Some(commodity);
-                }
+                //}
                 None
             }).await;
 
@@ -426,6 +427,6 @@ async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: Db, name: String, dlc: 
         let cache_mutex = Arc::new(Mutex::new(cache));
 
         AdHoc::on_ignite("Data Stage", |rocket| async {
-            rocket.attach(Db::fairing()).manage(cache_mutex).mount("/data", routes![root,commodity,system])
+            rocket.attach(DbConn::fairing()).manage(cache_mutex).mount("/data", routes![root,commodity,system])
         })
     }
