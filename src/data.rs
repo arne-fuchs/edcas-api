@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use rocket::fairing::AdHoc;
@@ -249,10 +248,10 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, address: i64, dlc:
                     sql = "select name,id,distance_from_arrival_ls,tidal_lock,terraform_state,class,atmosphere,volcanism,mass_em,radius,surface_gravity,surface_temperature,surface_pressure,
                     landable,semi_major_axis,eccentricity,orbital_inclination,periapsis,orbital_period,ascending_node,mean_anomaly,rotation_period,axial_tilt,discovered,mapped from body where system_address = $1 and odyssey = $2";
 
-                    let planets = conn.query(sql, &[&address, &odyssey]).unwrap();
+                    let planets_options = conn.query(sql, &[&address, &odyssey]).unwrap();
 
 
-                    //if let Some(planets) = planets_options {
+                    if let Some(planets) = planets_options {
                         let mut planet_vec: Vec<Planet> = vec![];
 
                         for r in planets {
@@ -289,7 +288,7 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, address: i64, dlc:
                             });
                         }
                         local_system.planets = Some(planet_vec);
-                    //}
+                    }
                     return Some(local_system);
                 }
                 None
