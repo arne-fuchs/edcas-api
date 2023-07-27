@@ -374,9 +374,9 @@ async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, name: String, d
                       AND lowest_buy.rn = 1
                       AND highest_sell.rn = 1;
                     ";
-                let r = conn.query_one(sql, &[&name_clone, &dlc_clone]).unwrap();
+                let optional_row = conn.query_one(sql, &[&name_clone, &dlc_clone]).ok();
 
-                //if let Some(r) = optional_row {
+                if let Some(r) = optional_row {
                     let lowest_buy_data = json!(
                         {
                             "buy_price": r.get::<usize,i32>(3),
@@ -400,7 +400,7 @@ async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, name: String, d
                         highest_sell_price: highest_sell_data,
                     };
                     return Some(commodity);
-                //}
+                }
                 None
             }).await;
 
