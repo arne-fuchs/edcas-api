@@ -218,7 +218,7 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, address: i64, dlc:
 
                             let id : i32 = r.get(1);
                             //language=postgresql
-                            let parents_sql = "select parent_type,parent_id from parents where system_address = $1 and body_id = $2";
+                            let parents_sql = "select parent_type,parent_id from parent where system_address = $1 and body_id = $2";
 
                             let parents_option = conn.query(parents_sql,&[&address,&id]).unwrap();
 
@@ -278,7 +278,7 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, address: i64, dlc:
 
                             let id : i32 = r.get(1);
                             //language=postgresql
-                            let parents_sql = "select parent_type,parent_id from parents where system_address = $1 and body_id = $2";
+                            let parents_sql = "select parent_type,parent_id from parent where system_address = $1 and body_id = $2";
 
                             let parents_option = conn.query(parents_sql,&[&address,&id]).unwrap();
 
