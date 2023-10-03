@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use rocket::fairing::AdHoc;
+use rocket::futures::Sink;
 use rocket::State;
 use rocket::serde::{Serialize, Deserialize, json::Json};
 
@@ -11,10 +12,13 @@ use rocket_sync_db_pools::database;
 use rocket_sync_db_pools::postgres;
 use serde_json::{json, Value};
 
+const CACHE_TIMEOUT: u64 = 600;
+
 #[database("postgres_db")]
 struct DbConn(postgres::Client);
 
 struct Cache {
+    commodity_history: HashMap<String, CommodityHistoryCache>,
     commodity: HashMap<String, CommodityCache>,
     system: HashMap<i64, SystemCache>,
 }
@@ -29,7 +33,7 @@ impl Cache {
             }
             Some(commodity) => {
                 //10 minutes
-                if commodity.instant.elapsed().as_secs() > 600 {
+                if commodity.instant.elapsed().as_secs() > CACHE_TIMEOUT {
                     //Cache too old -> sending nothing
                     None
                 } else {
@@ -48,6 +52,34 @@ impl Cache {
         self.commodity.insert(name, commodity_cache);
     }
 
+    fn get_commodity_history(&self, name: String) -> Option<CommodityHistory> {
+        let result = self.commodity_history.get(name.as_str());
+        return match result {
+            None => {
+                //Not cached yet
+                None
+            }
+            Some(commodity_history) => {
+                //10 minutes
+                if commodity_history.instant.elapsed().as_secs() > CACHE_TIMEOUT {
+                    //Cache too old -> sending nothing
+                    None
+                } else {
+                    //Cache usable -> sending
+                    Some(commodity_history.data.clone())
+                }
+            }
+        };
+    }
+
+    fn put_commodity_history(&mut self, commodity_history: CommodityHistory, name: String) {
+        let commodity_cache = CommodityHistoryCache {
+            instant: Instant::now(),
+            data: commodity_history,
+        };
+        self.commodity_history.insert(name, commodity_cache);
+    }
+
     fn get_system(&self, address: i64) -> Option<System> {
         let result = self.system.get(&address);
         return match result {
@@ -57,7 +89,7 @@ impl Cache {
             }
             Some(system) => {
                 //10 minutes
-                if system.instant.elapsed().as_secs() > 600 {
+                if system.instant.elapsed().as_secs() > CACHE_TIMEOUT {
                     //Cache too old -> sending nothing
                     None
                 } else {
@@ -343,6 +375,23 @@ async fn system(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, address: i64, dlc:
 }
 
 /**
+ * Commodity History
+**/
+struct CommodityHistoryCache {
+    instant: Instant,
+    data: CommodityHistory,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(crate = "rocket::serde")]
+struct CommodityHistory {
+    #[serde(skip_deserializing, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    odyssey: Option<bool>,
+    prices: Value
+}
+
+/**
  * Commodity
  **/
 struct CommodityCache {
@@ -362,7 +411,50 @@ struct Commodity {
     highest_sell_price: Value,
 }
 
-//TODO Handle stuff like drones where there are no stations etc.
+#[get("/<dlc>/commodity_history/<name>")]
+async fn commodity_history(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, name: String, dlc: String) -> Option<Json<CommodityHistory>> {
+    let name_clone = name.clone();
+    let dlc_clone = dlc.contains("odyssey");
+    let some_commodity_history = cache.lock().unwrap().get_commodity_history(name.clone());
+    return match some_commodity_history {
+        None => {
+            let data: Option<CommodityHistory> = db.run(move |conn|{
+                //language=postgresql
+                let sql = "SELECT timestamp,buy_price,sell_price,mean_price FROM commodity_history where odyssey=$1 and name=$2 order by timestamp desc limit 1000";
+                let optional_rows = conn.query(sql,&[&dlc_clone,&name_clone]).ok();
+
+                if let Some(rows) = optional_rows {
+                    let mut price_array = json!([]);
+                    for row in rows{
+                        price_array.as_array_mut().unwrap().push(json!({
+                            "timestamp": row.get::<usize,i64>(0),
+                            "buy_price": row.get::<usize,i32>(1),
+                            "sell_price": row.get::<usize,i32>(2),
+                            "mean_price": row.get::<usize,i32>(3),
+                        }));
+                    }
+                    let commodity_history = CommodityHistory{
+                        name: Some(name_clone),
+                        odyssey: Some(dlc_clone),
+                        prices: price_array
+                    };
+                    return Some(commodity_history)
+                }
+                None
+            }).await;
+
+            if let Some(commodity_history) = data {
+                cache.lock().unwrap().put_commodity_history(commodity_history.clone(), name.clone());
+                return Some(Json(commodity_history));
+            }
+            None
+        }
+        Some(commodity_history) => {
+            Some(Json(commodity_history))
+        }
+    }
+}
+
 #[get("/<dlc>/commodity/<name>")]
 async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, name: String, dlc: String) -> Option<Json<Commodity>> {
     let name_clone = name.clone();
@@ -455,6 +547,7 @@ async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, name: String, d
 
     pub fn stage() -> AdHoc {
         let cache = Cache {
+            commodity_history: HashMap::new(),
             commodity: HashMap::new(),
             system: HashMap::new(),
         };
@@ -462,6 +555,6 @@ async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, name: String, d
         let cache_mutex = Arc::new(Mutex::new(cache));
 
         AdHoc::on_ignite("Data Stage", |rocket| async {
-            rocket.attach(DbConn::fairing()).manage(cache_mutex).mount("/data", routes![root,commodity,system])
+            rocket.attach(DbConn::fairing()).manage(cache_mutex).mount("/data", routes![root,commodity,commodity_history,system])
         })
     }
