@@ -485,6 +485,7 @@ async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, name: String, d
                                  INNER JOIN station sh ON hc.market_id = sh.market_id
                         WHERE hc.name = $1 AND hc.odyssey = $2
                           AND sh.name NOT LIKE '___-___'
+                          AND hc.demand > 1000
                     ) AS highest_sell
                                         ON 1=1 -- Dummy join to get a Cartesian product (all combinations)
                              INNER JOIN (
@@ -495,7 +496,7 @@ async fn commodity(cache: &State<Arc<Mutex<Cache>>>, db: DbConn, name: String, d
                         FROM station lb
                                  INNER JOIN commodity lowest_buy_commodity ON lb.market_id = lowest_buy_commodity.market_id
                         WHERE lb.name NOT LIKE '___-___'
-                          AND lowest_buy_commodity.name = $1 AND lowest_buy_commodity.odyssey = $2 AND lowest_buy_commodity.buy_price > 0
+                          AND lowest_buy_commodity.name = $1 AND lowest_buy_commodity.odyssey = $2 AND lowest_buy_commodity.buy_price > 0 and lowest_buy_commodity.stock > 1000
                     ) AS lowest_buy
                                         ON 1=1 -- Dummy join to get a Cartesian product (all combinations)
                     WHERE name = $1 AND odyssey = $2
